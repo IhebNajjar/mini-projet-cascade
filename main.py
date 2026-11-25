@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from asr_module import transcrire_audio
 from classifier import classifieur
-from ocr_module import extraire_texte_image
+from ocr_module import OCRIndisponible, extraire_texte_image
 from schemas import FichierUpload, PredictionResponse, TexteRequest
 
 app = FastAPI(
@@ -65,7 +65,12 @@ async def predict_image(file: UploadFile = File(...)):
     except ValidationError as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
 
-    texte = extraire_texte_image(valide.contenu, valide.nom)
+    try:
+        texte = extraire_texte_image(valide.contenu, valide.nom)
+    except OCRIndisponible as erreur:
+        raise HTTPException(status_code=503, detail=str(erreur)) from erreur
+    except ValueError as erreur:
+        raise HTTPException(status_code=422, detail=str(erreur)) from erreur
     return repondre("image", texte)
 
 
@@ -83,7 +88,10 @@ async def predict_audio(file: UploadFile = File(...)):
     except ValidationError as erreur:
         raise HTTPException(status_code=422, detail=str(erreur)) from erreur
 
-    texte = transcrire_audio(valide.contenu, valide.nom)
+    try:
+        texte = transcrire_audio(valide.contenu, valide.nom)
+    except ValueError as erreur:
+        raise HTTPException(status_code=422, detail=str(erreur)) from erreur
     return repondre("audio", texte)
 
 

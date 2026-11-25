@@ -26,15 +26,16 @@ mini-projet-cascade/
 ├── train_model.py        Étape 1 — entraînement, évaluation, sauvegarde des .pkl
 ├── classifier.py         Étape 1 — chargement des artefacts et prédiction
 ├── ocr_module.py         Étape 2 — lecture du texte dans une image (pytesseract + Pillow)
-├── asr_module.py         Étape 2 — transcription d'un message vocal (Whisper)
+├── asr_module.py         Étape 2 — transcription locale (faster-whisper)
 ├── schemas.py            Étape 3 — validation Pydantic (format, MIME, taille)
 ├── main.py               Étape 3 — application FastAPI et 4 routes
 ├── web_app.html          Étape 4, option B — mini-application web HTML/JS
-├── test_api.py           Étape 5 — 9 tests pytest avec httpx.TestClient
+├── test_api.py           Étape 5 — 11 tests pytest avec httpx.TestClient
 ├── start.bat             Raccourci Windows : lance l'API + la page web
-├── test.bat              Raccourci Windows : lance les 9 tests
+├── test.bat              Raccourci Windows : lance les 11 tests
 ├── REPONSES_PROFESSEUR.md  Questions probables à l'oral + réponses courtes
 ├── requirements.txt      Dépendances Python
+├── .gitignore            Exclut __pycache__/, .pytest_cache/ et .env
 ├── data_test_v2/         Jeu de données fourni (24 textes, 9 images, 9 audios)
 │   ├── textes.csv
 │   ├── images.csv
@@ -60,7 +61,7 @@ structure, celle-ci est propre à ce mini-projet.
   l'API et la page web dans deux fenêtres noires, puis ouvre les deux
   adresses dans le navigateur. Laisser les fenêtres ouvertes pendant la
   démonstration ; les fermer pour arrêter l'application.
-- **Double-clic sur `test.bat`** : lance les 9 tests et affiche
+- **Double-clic sur `test.bat`** : lance les 11 tests et affiche
   `RESULT: ALL TESTS PASSED`.
 
 Les commandes manuelles équivalentes sont données ci-dessous.
@@ -75,6 +76,39 @@ Python 3.10 ou plus récent est nécessaire.
 cd mini-projet-cascade
 pip install -r requirements.txt
 ```
+
+### Installation de Tesseract (OCR réel, obligatoire)
+
+L'image est lue par le vrai Tesseract — **aucun retour au fichier `images.csv`**.
+Sur Windows :
+
+1. Télécharger/installer **UB-Mannheim TesseractOCR 5.4** (ou utiliser
+   `winget install --id UB-Mannheim.TesseractOCR`).
+2. Installer aussi le **pack de langue française** (`fra.traineddata`) dans
+   `C:\Program Files\Tesseract-OCR\tessdata\`. Sans lui, la route image
+   renvoie **503**.
+3. Redémarrer le terminal après l'installation pour que le `PATH` soit à jour.
+   `ocr_module.py` détecte aussi automatiquement
+   `C:\Program Files\Tesseract-OCR\tesseract.exe` si le `PATH` n'est pas encore
+   rafraîchi.
+
+Vérification : `tesseract --list-langs` doit afficher `eng`, `fra`, `osd`.
+Image illisible ou sans texte → **422** ; Tesseract absent → **503**.
+
+### Installation de Whisper (ASR réel, obligatoire)
+
+`asr_module.py` utilise **faster-whisper** en local : pas de clé API, pas de
+`ffmpeg` système à installer sur Windows. Le modèle `base` est téléchargé
+au premier appel (~100 Mo) puis mis en cache. **Faire ce premier appel avant
+la démonstration**, avec une connexion qui fonctionne :
+
+```bash
+python -c "from asr_module import transcrire_audio; from pathlib import Path; print(transcrire_audio(Path('data_test_v2/audios/A01.mp3').read_bytes()))"
+```
+
+Si la transcription française est mauvaise, remplacer `"base"` par `"small"`
+dans `asr_module.py` (plus lent). Aucun fallback CSV : si rien n'est entendu,
+la route renvoie **422**.
 
 Les modèles étant déjà fournis dans `models/`, l'entraînement n'est pas
 obligatoire. Pour le rejouer :
@@ -94,19 +128,35 @@ Matrice de confusion (lignes = vérité, colonnes = prédiction)
 accuracy 1.00   macro avg 1.00
 ```
 
-**À lire honnêtement :** l'évaluation est faite sur les 24 textes servant à
-l'entraînement. Avec un jeu aussi petit, ce score de 1.00 n'est pas une
-mesure de généralisation. C'est une vérification que le modèle a bien appris
-les exemples fournis (choix conforme à l'étape 1 du sujet, qui demande une
-matrice de confusion et un rapport de classification).
+**Évaluation honnête (Leave-One-Out).** Le script retire ensuite chaque avis
+à tour de rôle, réentraîne sur les 23 autres, et prédit l'avis retiré :
 
-Vérification complémentaire : les 9 textes attendus des images et les 9
-transcriptions attendues des audios sont classés correctement (18/18) par
-le même classifieur texte. Cela valide la cascade OCR/ASR → texte → sentiment.
+```
+=== Leave-One-Out (un avis retiré à chaque fois) ===
+Accuracy LOO : 0.958
+[[8 0 0]
+ [0 8 0]
+ [0 1 7]]
+```
 
-Transcription audio : la clé `GROQ_API_KEY` permet d'utiliser
-`whisper-large-v3-turbo`. Sans clé, le projet reste fonctionnel : il utilise
-la transcription de référence présente dans `audios.csv`.
+**23 avis sur 24 sont corrects** ; un avis positif est prédit `neutre`.
+
+À titre de comparaison, le même test avec **TF-IDF seul** (sans les listes de
+mots) donne **0.125**. Ce score très bas est un artefact connu d'un jeu
+minuscule et parfaitement équilibré : retirer un exemple rend sa classe plus
+rare et le modèle se trompe. Il montre surtout que ce sont les **listes de
+mots** qui apportent la connaissance préalable et permettent de généraliser :
+LOO passe de **0.125 à 0.958**. À dire soi-même à l'oral.
+
+Le score de 1.00 affiché plus haut est mesuré sur les textes d'entraînement :
+ce n'est **pas** une mesure de généralisation. C'est une vérification que le
+modèle a bien appris les exemples fournis (choix conforme à l'étape 1 du
+sujet, qui demande une matrice de confusion et un rapport de classification).
+
+Vérification complémentaire : les 9 textes réellement lus dans les images par
+Tesseract et les 9 transcriptions réellement produites par Whisper sont
+classés correctement (18/18) par le même classifieur texte. Cela valide la
+cascade OCR/ASR → texte → sentiment.
 
 ---
 
@@ -141,14 +191,14 @@ La page envoie les requêtes à `http://127.0.0.1:8000` ; la classe
 | Étape | Fichiers | Ce qui est fait |
 |---|---|---|
 | 1. Modélisation texte | `preprocessing.py`, `train_model.py`, `classifier.py` | Chargement de `textes.csv`, minuscules + suppression des mots grammaticaux, TF-IDF (1-grams et 2-grams) + 5 indices calculés à partir de petites listes de mots positifs / négatifs / neutres / de négation, Régression Logistique, matrice de confusion, rapport de classification, `model.pkl` + `vectorizer.pkl` |
-| 2. OCR & ASR | `ocr_module.py`, `asr_module.py` | Image : Pillow (niveaux de gris, contraste) puis `pytesseract.image_to_string`. Audio : transcription Whisper puis envoi du texte au classifieur |
+| 2. OCR & ASR | `ocr_module.py`, `asr_module.py` | Image : Pillow (niveaux de gris, contraste) puis vrai Tesseract en français (`lang="fra"`) ; aucun retour au CSV. Audio : vraie transcription locale faster-whisper ; aucun retour au CSV. Le texte obtenu est envoyé au classifieur |
 | 3. API REST | `main.py`, `schemas.py` | `/predict/text`, `/predict/image`, `/predict/audio`, `/predict` (détection auto). Pydantic valide le texte, les extensions, les types MIME et la taille maximale (10 Mo). Erreurs incorrectes → 422 |
 | 4. Application web | `web_app.html`, `/docs` | Option B : saisie de texte, import d'image ou d'audio, appel de l'API en arrière-plan, affichage du sentiment et de la confiance. Option A également documentée via Swagger |
-| 5. Tests | `test_api.py` | 9 tests `pytest` + `httpx.TestClient` : 200 et structure JSON pour chaque route, 422 pour les charges utiles invalides |
+| 5. Tests | `test_api.py` | 11 tests `pytest` + `httpx.TestClient` : 200 et structure JSON pour chaque route, 422 pour les charges utiles invalides (texte vide, image blanche, image corrompue, mauvais format) |
 
 ```bash
 pytest
-# 9 passed
+# 11 passed
 ```
 
 ---
@@ -173,8 +223,8 @@ Autres essais réels effectués :
 
 | Entrée | Sentiment | Confiance |
 |---|---|---|
-| `data_test_v2/images/I01.png` (OCR) | positif | 0.983 |
-| `data_test_v2/audios/A01.mp3` (Whisper) | positif | 0.968 |
+| `data_test_v2/images/I01.png` (vrai OCR Tesseract `fra`) | positif | 0.983 |
+| `data_test_v2/audios/A01.mp3` (vrai Whisper local) | positif | 0.968 |
 | `Superbe expérience !` (mot jamais vu) | positif | 0.850 |
 | `Mauvaise qualité, pire achat` (mots jamais vus) | negatif | 0.977 |
 | `blablabla xyz` (aucun indice) | neutre | 0.335 |
@@ -204,11 +254,15 @@ probables à l'oral avec une réponse courte et honnête à chacune.
   quatre clés, ce qui simplifie l'interface web et les tests.
 - **Validation Pydantic** : elle refuse avant l'inférence un texte vide, un
   faux type de fichier ou un fichier trop gros (422 au lieu d'une erreur 500).
-- **Dégradation gracieuse** : si le moteur Tesseract n'est pas installé sur
-  la machine, `ocr_module.py` reprend le texte attendu du `images.csv` ; si
-  la clé Groq est absente ou le quota épuisé, `asr_module.py` reprend la
-  transcription du `audios.csv`. L'API continue donc de répondre hors ligne.
-  Pour activer le vrai OCR, installer Tesseract OCR et l'ajouter au `PATH`.
+- **Vrais modules, sans triche** : l'OCR vient de Tesseract et la transcription
+  vient de Whisper. Les CSV ne servent que de vérité-terrain pour vérifier les
+  résultats pendant le développement ; l'API ne les lit jamais. Une erreur
+  est explicite : 503 si Tesseract manque, 422 si l'image est illisible ou
+  si aucun texte/parole n'est détecté.
+- **Évaluation Leave-One-Out** : 0.958 (23/24) contre 0.125 pour TF-IDF seul.
+  C'est la preuve que les listes de mots, et non la mémorisation, permettent
+  de généraliser. Le score 1.00 sur l'entraînement est donné à titre indicatif.
 - **Limite connue** : 24 textes et 9 images/audios. Le projet démontre le
   principe de la cascade et fonctionne sur les avis proches du dataset ;
-  il n'est pas dimensionné pour la production.
+  il n'est pas dimensionné pour la production. Le premier appel Whisper
+  télécharge le modèle (~100 Mo) et met quelques secondes.

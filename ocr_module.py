@@ -1,50 +1,46 @@
-"""
-Étape 2 — Module image : pytesseract + Pillow.
+"""Étape 2 — Module image : pytesseract + Pillow.
 
-Extrait le texte brut d'une capture d'écran puis le transmet au classifieur
-textuel (appel effectué dans main.py).
+Le texte vient de l'image elle-même. Il n'y a aucun retour au fichier CSV :
+si l'OCR est indisponible ou ne lit rien, une erreur explicite est renvoyée.
 """
 
 import io
 from pathlib import Path
 
-import pandas as pd
-from PIL import Image, ImageEnhance
 import pytesseract
+from PIL import Image, ImageEnhance
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data_test_v2"
+# Après installation de Tesseract sur Windows, le PATH n'est parfois mis à
+# jour qu'au prochain redémarrage. On détecte donc l'emplacement standard.
+if pytesseract.pytesseract.tesseract_cmd == "tesseract":
+    for candidat in (
+        Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
+    ):
+        if candidat.exists():
+            pytesseract.pytesseract.tesseract_cmd = str(candidat)
+            break
 
 
-def charger_references():
-    """Textes attendus du dataset, utilisés si Tesseract est absent."""
-    csv = DATA_DIR / "images.csv"
-    if csv.exists():
-        df = pd.read_csv(csv, encoding="utf-8")
-        return dict(zip(df["fichier"], df["texte_attendu_ocr"]))
-    return {}
-
-
-REFERENCES_IMAGES = charger_references()
+class OCRIndisponible(Exception):
+    """Tesseract n'est pas installé ou ne peut pas être lancé."""
 
 
 def extraire_texte_image(contenu: bytes, nom_fichier: str = "") -> str:
-    """Renvoie le texte lu dans l'image (OCR ou référence du dataset)."""
-    image = Image.open(io.BytesIO(contenu))
-    image = image.convert("L")
-    image = ImageEnhance.Contrast(image).enhance(1.8)
-
-    texte = ""
+    """Renvoie le texte réellement lu dans l'image."""
     try:
-        texte = " ".join(pytesseract.image_to_string(image).split())
-    except Exception:
-        # Moteur Tesseract non installé sur la machine
-        texte = ""
+        image = Image.open(io.BytesIO(contenu)).convert("L")
+    except Exception as e:
+        raise ValueError("Image illisible") from e
+
+    image = ImageEnhance.Contrast(image).enhance(1.8)
+    try:
+        texte = " ".join(pytesseract.image_to_string(image, lang="fra").split())
+    except (pytesseract.TesseractNotFoundError, pytesseract.TesseractError) as e:
+        raise OCRIndisponible(
+            "Tesseract avec le pack français n'est pas installé"
+        ) from e
 
     if not texte:
-        for nom, reference in REFERENCES_IMAGES.items():
-            if nom.lower() in (nom_fichier or "").lower():
-                return reference
-        return "Avis client reçu sous forme d'image"
-
+        raise ValueError("Aucun texte détecté dans l'image")
     return texte

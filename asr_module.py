@@ -1,52 +1,27 @@
-"""
-Étape 2 — Module audio : transcription ASR (Whisper via Groq).
+"""Étape 2 — Module audio : transcription locale avec faster-whisper.
 
-Accepte les fichiers .wav et .mp3 du dossier data_test_v2/audios/.
-Si aucune clé Groq n'est disponible, la transcription de référence du
-dataset est utilisée (mode hors-ligne).
+Le modèle est chargé une seule fois, à la première requête. Le texte vient
+du fichier audio envoyé ; il n'y a aucun retour au fichier CSV.
 """
 
-import os
-from pathlib import Path
+import io
 
-import pandas as pd
+from faster_whisper import WhisperModel
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data_test_v2"
-MODELE_WHISPER = "whisper-large-v3-turbo"
+_model = None
 
 
-def charger_references():
-    csv = DATA_DIR / "audios.csv"
-    if csv.exists():
-        df = pd.read_csv(csv, encoding="utf-8")
-        return {Path(f).stem.lower(): t for f, t in
-                zip(df["fichier"], df["transcription_reference"])}
-    return {}
-
-
-REFERENCES_AUDIOS = charger_references()
+def _get_model():
+    global _model
+    if _model is None:  # chargement unique, à la première demande
+        _model = WhisperModel("base", device="cpu", compute_type="int8")
+    return _model
 
 
 def transcrire_audio(contenu: bytes, nom_fichier: str = "") -> str:
-    """Renvoie la transcription du message vocal."""
-    cle = os.environ.get("GROQ_API_KEY", "")
-    if cle:
-        try:
-            from groq import Groq
-            client = Groq(api_key=cle)
-            nom = nom_fichier or "audio.wav"
-            reponse = client.audio.transcriptions.create(
-                file=(nom, contenu),
-                model=MODELE_WHISPER,
-                language="fr",
-                temperature=0.0,
-            )
-            if reponse.text.strip():
-                return reponse.text.strip()
-        except Exception:
-            # Quota, réseau indisponible : on utilise la référence locale.
-            pass
-
-    stem = Path(nom_fichier or "").stem.lower()
-    return REFERENCES_AUDIOS.get(stem, "Message vocal client reçu")
+    """Renvoie le texte réellement entendu dans le message vocal."""
+    segments, _ = _get_model().transcribe(io.BytesIO(contenu), language="fr")
+    texte = " ".join(s.text.strip() for s in segments).strip()
+    if not texte:
+        raise ValueError("Aucune parole détectée")
+    return texte

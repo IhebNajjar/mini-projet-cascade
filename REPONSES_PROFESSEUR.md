@@ -66,16 +66,24 @@ boîte noire.
 
 `train_model.py` affiche la **matrice de confusion** et le **rapport de
 classification** (précision, rappel, F1). Les 24 textes d'entraînement sont
-classés correctement (accuracy 1.00). En plus, les 9 textes attendus des
-images et les 9 transcriptions attendues des audios sont classés correctement
-(18/18). Ces résultats sont écrits dans le README.
+classés correctement (accuracy 1.00). J'ajoute ensuite une évaluation
+**Leave-One-Out** : on retire chaque avis à tour de rôle, on réentraîne sur
+les 23 autres, et on prédit l'avis retiré. Résultat : **0.958**, soit 23 avis
+sur 24 corrects ; un avis positif est prédit neutre. Les 9 textes réellement
+lus par Tesseract et les 9 transcriptions réellement produites par Whisper
+sont classés correctement (18/18).
 
 ## 8. Un score de 1.00 n'est-il pas suspicieux ?
 
-Oui, et je le dis clairement : l'évaluation est faite sur les textes qui ont
-servi à l'entraînement. Ce n'est **pas** une mesure de généralisation. Le
-jeu fourni est petit (24 avis). Le but du mini-projet est de montrer le
-principe de la cascade, pas de livrer un modèle de production.
+Oui, et je le dis clairement : ce 1.00 est mesuré sur les textes qui ont servi
+à l'entraînement. Ce n'est **pas** une mesure de généralisation. C'est
+pourquoi j'ai fait le Leave-One-Out : **0.958**. Et avec TF-IDF seul, sans mes
+listes de mots, le Leave-One-Out tombe à **0.125** — un artefact d'un jeu
+minuscule et parfaitement équilibré, où retirer un exemple rend sa classe plus
+rare. La conclusion est importante : ce sont les listes de mots qui apportent
+la connaissance préalable et font passer la généralisation de 0.125 à 0.958.
+Le but du mini-projet est de montrer le principe de la cascade, pas de livrer
+un modèle de production.
 
 ## 9. Quelles sont les routes de l'API ?
 
@@ -101,17 +109,26 @@ C'est la robustesse demandée à l'étape 5.
 ## 11. Comment fonctionne le module image ?
 
 `ocr_module.py` ouvre l'image avec Pillow, la convertit en niveaux de gris,
-augmente le contraste, puis appelle `pytesseract.image_to_string()`.
-Tesseract n'étant pas installé sur cette machine, le module retombe sur le
-texte attendu du `images.csv` afin que l'API réponde quand même. Installer
-Tesseract et l'ajouter au PATH active le vrai OCR.
+augmente le contraste, puis appelle `pytesseract.image_to_string(image,
+lang="fra")`. C'est le **vrai OCR** : le texte vient de l'image, jamais du
+`images.csv`. J'ai installé Tesseract 5.4 avec le pack de langue française
+sur cette machine, et les 9 images sont lues correctement. Si Tesseract est
+absent, la route renvoie **503** ; si l'image est illisible ou ne contient
+aucun texte, elle renvoie **422**. Sur Windows il faut installer Tesseract +
+`fra.traineddata` et redémarrer le terminal ; le module détecte aussi
+automatiquement `C:\Program Files\Tesseract-OCR\tesseract.exe` si le PATH
+n'est pas encore à jour.
 
 ## 12. Comment fonctionne le module audio ?
 
-`asr_module.py` envoie le fichier à l'API Groq avec le modèle
-`whisper-large-v3-turbo` et la langue `fr`. Le texte transcrit est envoyé au
-classifieur. Sans clé `GROQ_API_KEY` ou en cas de quota épuisé, le module
-utilise la transcription de référence du `audios.csv`.
+`asr_module.py` utilise **faster-whisper** en local, modèle `base`, langue
+`fr`, sur CPU en `int8`. Le modèle est chargé une seule fois à la première
+requête, puis mis en cache. C'est une **vraie transcription** du fichier
+envoyé : aucun retour au `audios.csv`. Pas besoin de clé API ni de ffmpeg
+système sur Windows. Le premier appel télécharge le modèle (~100 Mo), donc
+je le fais une fois avant la démonstration. Si rien n'est entendu, la route
+renvoie **422**. Avec un français perfectible, on peut passer à `"small"`
+(plus lent).
 
 ## 13. Pourquoi les fichiers s'appellent .mp3 alors que le sujet dit .wav ?
 
@@ -139,29 +156,33 @@ C'est une preuve que l'API est bien structurée.
 
 ## 17. Qu'avez-vous testé exactement ?
 
-`test_api.py` contient 9 tests avec `httpx.TestClient` : les routes texte,
-image, audio et auto renvoient bien 200 avec les quatre clés attendues, et
-les charges utiles incorrectes (texte vide, mauvais format de fichier, JSON
-vide) renvoient bien 422. Commande : `pytest` → 9 passed.
+`test_api.py` contient **11 tests** avec `httpx.TestClient` : les routes texte,
+image, audio et auto renvoient bien 200 avec les quatre clés attendues, la
+transcription audio contient plus de 3 mots (donc elle vient bien du son), et
+les charges utiles incorrectes renvoient bien 422 : texte vide, image blanche
+(aucun texte détecté), image corrompue, mauvais format de fichier, JSON vide.
+Commande : `pytest` → 11 passed.
 
 ## 18. Comment lancez-vous le projet ?
 
 Double-clic sur `start.bat` : il vérifie Python, les modèles, ouvre l'API et
 la page web dans deux fenêtres, puis ouvre les deux adresses dans le
-navigateur. Double-clic sur `test.bat` : il lance les 9 tests. Les commandes
+navigateur. Double-clic sur `test.bat` : il lance les 11 tests. Les commandes
 manuelles sont dans le README (`uvicorn main:app --reload`,
 `python -m http.server 8001`, `pytest`).
 
 ## 19. Quelles sont les limites du projet ?
 
-Petit jeu de données (24 textes, 9 images, 9 audios), OCR réel indisponible
-sur cette machine, transcriptions audio dépendantes d'une clé Groq, et score
-de 1.00 calculé sur l'entraînement. Je les ai écrites dans le README au lieu
-de les masquer.
+Petit jeu de données (24 textes, 9 images, 9 audios), OCR et ASR réels mais
+dépendants de l'installation de Tesseract + pack français et du téléchargement
+du modèle Whisper au premier appel, et score de 1.00 calculé sur
+l'entraînement (le score honnête est 0.958 en Leave-One-Out). Je les ai écrites
+dans le README au lieu de les masquer.
 
 ## 20. Que feriez-vous avec plus de temps ?
 
 Un vrai jeu de données beaucoup plus grand, une validation avec séparation
-entraînement/test ou Leave-One-Out, l'installation de Tesseract pour l'OCR,
-et une mesure d'erreur de transcription (WER) pour l'audio, comme dans
-l'atelier 3.
+entraînement/test, davantage de mots dans les listes, une mesure d'erreur de
+transcription (WER) pour l'audio comme dans l'atelier 3, et le passage au
+modèle Whisper `small` pour un meilleur français. Le Leave-One-Out est déjà
+fait : 0.958 contre 0.125 sans lexique.

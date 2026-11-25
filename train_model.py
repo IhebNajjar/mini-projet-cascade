@@ -13,7 +13,9 @@ from pathlib import Path
 
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import LeaveOneOut, cross_val_predict
+from sklearn.pipeline import Pipeline
 
 from preprocessing import VectoriseurSentiment, nettoyer
 
@@ -48,6 +50,17 @@ def main():
         print(f"{vrai:>12}" + "".join(f"{v:>12}" for v in ligne))
     print("\nRapport de classification")
     print(classification_report(verites, predictions, labels=classes))
+
+    # 4b. Évaluation honnête : on retire chaque avis à tour de rôle.
+    pipe = Pipeline([
+        ("vec", VectoriseurSentiment()),
+        ("clf", LogisticRegression(max_iter=1000, random_state=0)),
+    ])
+    pred_loo = cross_val_predict(pipe, textes, verites, cv=LeaveOneOut())
+    print("\n=== Leave-One-Out (un avis retiré à chaque fois) ===")
+    print(f"Accuracy LOO : {accuracy_score(verites, pred_loo):.3f}")
+    print(confusion_matrix(verites, pred_loo, labels=classes))
+    print(classification_report(verites, pred_loo, labels=classes))
 
     # 5. Persistance des artefacts
     MODELES_DIR.mkdir(parents=True, exist_ok=True)

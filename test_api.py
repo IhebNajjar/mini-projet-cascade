@@ -4,9 +4,11 @@
     pytest
 """
 
+import io
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from main import app
 
@@ -48,8 +50,7 @@ def test_texte_vide_rejete():
 
 def test_image_du_dataset():
     chemin = DATA_DIR / "images" / "I01.png"
-    if not chemin.exists():
-        return
+    assert chemin.exists()
     with open(chemin, "rb") as f:
         data = verifier_structure(client.post(
             "/predict/image",
@@ -67,18 +68,36 @@ def test_image_format_interdit_rejete():
     assert response.status_code == 422
 
 
+def test_image_blanche_rejetee():
+    tampon = io.BytesIO()
+    Image.new("RGB", (40, 40), "white").save(tampon, format="PNG")
+    response = client.post(
+        "/predict/image",
+        files={"file": ("blanche.png", tampon.getvalue(), "image/png")},
+    )
+    assert response.status_code == 422
+
+
+def test_image_corrompue_rejetee():
+    response = client.post(
+        "/predict/image",
+        files={"file": ("cassee.png", b"pas une image", "image/png")},
+    )
+    assert response.status_code == 422
+
+
 # ---- /predict/audio ----
 
 def test_audio_du_dataset():
     chemin = DATA_DIR / "audios" / "A01.mp3"
-    if not chemin.exists():
-        return
+    assert chemin.exists()
     with open(chemin, "rb") as f:
         data = verifier_structure(client.post(
             "/predict/audio",
             files={"file": ("A01.mp3", f.read(), "audio/mpeg")},
         ))
     assert data["source"] == "audio"
+    assert len(data["texte_extrait"].split()) > 3
 
 
 def test_audio_format_interdit_rejete():
