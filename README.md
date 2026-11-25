@@ -31,6 +31,9 @@ mini-projet-cascade/
 ├── main.py               Étape 3 — application FastAPI et 4 routes
 ├── web_app.html          Étape 4, option B — mini-application web HTML/JS
 ├── test_api.py           Étape 5 — 9 tests pytest avec httpx.TestClient
+├── start.bat             Raccourci Windows : lance l'API + la page web
+├── test.bat              Raccourci Windows : lance les 9 tests
+├── REPONSES_PROFESSEUR.md  Questions probables à l'oral + réponses courtes
 ├── requirements.txt      Dépendances Python
 ├── data_test_v2/         Jeu de données fourni (24 textes, 9 images, 9 audios)
 │   ├── textes.csv
@@ -50,6 +53,17 @@ mini-projet-cascade/
 Organisation volontairement **plate** : les modules sont à la racine, sans
 dossier `app/` ni `tests/`. Chaque atelier de la classe ayant sa propre
 structure, celle-ci est propre à ce mini-projet.
+
+### Raccourcis Windows (le plus simple)
+
+- **Double-clic sur `start.bat`** : vérifie Python et les modèles, ouvre
+  l'API et la page web dans deux fenêtres noires, puis ouvre les deux
+  adresses dans le navigateur. Laisser les fenêtres ouvertes pendant la
+  démonstration ; les fermer pour arrêter l'application.
+- **Double-clic sur `test.bat`** : lance les 9 tests et affiche
+  `RESULT: ALL TESTS PASSED`.
+
+Les commandes manuelles équivalentes sont données ci-dessous.
 
 ---
 
@@ -168,6 +182,9 @@ Autres essais réels effectués :
 
 Les captures correspondantes sont dans `screenshots/` :
 `web_app.png` et `swagger.png`.
+
+Le fichier `REPONSES_PROFESSEUR.md` reprend les 20 questions les plus
+probables à l'oral avec une réponse courte et honnête à chacune.
 
 ### Choix techniques expliqués
 
