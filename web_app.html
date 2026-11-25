@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-commerce Customer Voice — Mini-app de test</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6fa; color: #1f2937; margin: 0; padding: 30px; }
+        .wrap { max-width: 860px; margin: auto; }
+        h1 { color: #1e3a8a; }
+        .tabs { display: flex; gap: 8px; margin: 20px 0; }
+        button { padding: 10px 16px; cursor: pointer; border: 1px solid #cbd5e1; background: white; border-radius: 6px; }
+        button.actif { background: #1e3a8a; color: white; }
+        .carte { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 22px; }
+        .panneau { display: none; }
+        .panneau.affiche { display: block; }
+        textarea { width: 100%; height: 110px; padding: 10px; box-sizing: border-box; }
+        .resultat { margin-top: 18px; padding: 16px; border-radius: 8px; display: none; }
+        .positif { background: #ecfdf5; border-left: 6px solid #10b981; }
+        .negatif { background: #fef2f2; border-left: 6px solid #ef4444; }
+        .neutre  { background: #f3f4f6; border-left: 6px solid #6b7280; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🛍️ Classifieur de Sentiment Multi-source</h1>
+    <p>Mini-application de test — Texte, Image (OCR), Voix (ASR) → <code>POST /predict/...</code></p>
+    <p><a href="http://127.0.0.1:8000/docs" target="_blank">Documentation Swagger (/docs)</a></p>
+
+    <div class="tabs">
+        <button id="onglet-texte" class="actif" onclick="afficher('texte')">Texte</button>
+        <button id="onglet-image" onclick="afficher('image')">Image</button>
+        <button id="onglet-audio" onclick="afficher('audio')">Audio</button>
+    </div>
+
+    <div class="carte">
+        <div id="texte" class="panneau affiche">
+            <h2>Avis écrit</h2>
+            <textarea id="texte-valeur">Produit parfait, livraison très rapide, je recommande !</textarea>
+            <br><br>
+            <button onclick="envoyerTexte()">Classifier le texte</button>
+        </div>
+
+        <div id="image" class="panneau">
+            <h2>Capture d'écran</h2>
+            <input type="file" id="image-fichier" accept="image/png,image/jpeg,image/webp">
+            <br><br>
+            <button onclick="envoyerFichier('image')">Classifier l'image (OCR)</button>
+        </div>
+
+        <div id="audio" class="panneau">
+            <h2>Message vocal</h2>
+            <input type="file" id="audio-fichier" accept="audio/wav,audio/mp3,audio/m4a">
+            <br><br>
+            <button onclick="envoyerFichier('audio')">Classifier l'audio (ASR)</button>
+        </div>
+
+        <div id="resultat" class="resultat">
+            <h3 id="res-sentiment"></h3>
+            <p>Confiance : <strong id="res-confiance"></strong></p>
+            <p>Texte extrait : <span id="res-texte"></span></p>
+            <p>Source : <span id="res-source"></span></p>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+function afficher(nom) {
+    ["texte", "image", "audio"].forEach(n => {
+        document.getElementById(n).classList.toggle("affiche", n === nom);
+        document.getElementById("onglet-" + n).classList.toggle("actif", n === nom);
+    });
+    document.getElementById("resultat").style.display = "none";
+}
+
+function afficherResultat(data) {
+    const bloc = document.getElementById("resultat");
+    bloc.className = "resultat " + data.sentiment_predit;
+    bloc.style.display = "block";
+    document.getElementById("res-sentiment").textContent = "Sentiment : " + data.sentiment_predit;
+    document.getElementById("res-confiance").textContent = data.confiance;
+    document.getElementById("res-texte").textContent = data.texte_extrait;
+    document.getElementById("res-source").textContent = data.source;
+}
+
+async function envoyerTexte() {
+    const texte = document.getElementById("texte-valeur").value;
+    const reponse = await fetch(API + "/predict/text", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({texte: texte})
+    });
+    if (reponse.ok) afficherResultat(await reponse.json());
+    else alert("Erreur " + reponse.status + " : " + await reponse.text());
+}
+
+async function envoyerFichier(type) {
+    const input = document.getElementById(type + "-fichier");
+    if (!input.files.length) { alert("Choisissez un fichier."); return; }
+    const form = new FormData();
+    form.append("file", input.files[0]);
+    const reponse = await fetch(API + "/predict/" + type, {method: "POST", body: form});
+    if (reponse.ok) afficherResultat(await reponse.json());
+    else alert("Erreur " + reponse.status + " : " + await reponse.text());
+}
+</script>
+</body>
+</html>
