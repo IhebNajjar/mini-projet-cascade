@@ -33,7 +33,7 @@ mini-projet-cascade/
 ├── test_api.py           Étape 5 — 11 tests pytest avec httpx.TestClient
 ├── start.bat             Raccourci Windows : lance l'API + la page web
 ├── test.bat              Raccourci Windows : lance les 11 tests
-├── REPONSES_PROFESSEUR.md  Questions probables à l'oral + réponses courtes
+├── REPONSES.md             Questions probables à l'oral + réponses courtes
 ├── requirements.txt      Dépendances Python
 ├── .gitignore            Exclut __pycache__/, .pytest_cache/ et .env
 ├── data_test_v2/         Jeu de données fourni (24 textes, 9 images, 9 audios)
@@ -117,29 +117,52 @@ obligatoire. Pour le rejouer :
 python train_model.py
 ```
 
-Sortie attendue (24 exemples, 8 par classe) :
+Le script affiche une **matrice de confusion par modèle** (lignes = vérité,
+colonnes = prédiction), d'abord sur l'entraînement, puis en Leave-One-Out.
+
+Modèle retenu — Régression Logistique (entraînement) :
 
 ```
-Matrice de confusion (lignes = vérité, colonnes = prédiction)
                  negatif      neutre     positif
      negatif           8           0           0
       neutre           0           8           0
      positif           0           0           8
-accuracy 1.00   macro avg 1.00
 ```
 
-**Évaluation honnête (Leave-One-Out).** Le script retire ensuite chaque avis
-à tour de rôle, réentraîne sur les 23 autres, et prédit l'avis retiré :
+**Évaluation honnête (Leave-One-Out).** On retire chaque avis à tour de rôle,
+on réentraîne sur les 23 autres, et on prédit l'avis retiré. Matrices LOO :
 
 ```
-=== Leave-One-Out (un avis retiré à chaque fois) ===
-Accuracy LOO : 0.958
-[[8 0 0]
- [0 8 0]
- [0 1 7]]
+Régression Logistique        SVM linéaire (SVC)
+[[8 0 0]                     [[8 0 0]
+ [0 8 0]                      [0 8 0]
+ [0 1 7]]                     [0 1 7]]
 ```
 
-**23 avis sur 24 sont corrects** ; un avis positif est prédit `neutre`.
+SVR (bonus) donne `[[8 0 0] [0 8 0] [0 3 5]]` : 3 positifs prédits neutres.
+
+**Comparaison des modèles** demandée par le sujet (le PDF propose
+« Régression Logistique ou SVM ») :
+
+| Modèle | Acc. entraînement | Acc. LOO | F1 macro LOO |
+|---|---|---|---|
+| **Régression Logistique (retenu)** | 1.000 | **0.958** | **0.958** |
+| SVM linéaire / SVC (comparaison demandée) | 1.000 | **0.958** | **0.958** |
+
+Les deux modèles se trompent sur le même avis positif prédit `neutre`. La
+Régression Logistique est retenue à égalité de LOO avec le SVM parce qu'elle
+fournit des **probabilités**, donc le champ `confiance` de l'API. Le SVC par
+défaut donne une décision sèche (`probability=True` serait plus lent).
+
+**Bonus (hors comparaison demandée) : SVR.** Comme SVR est un modèle de
+**régression**, la classe `PontSVR` code les classes en 0/1/2 puis arrondit la
+valeur prédite. Résultat : 1.000 sur l'entraînement mais **0.875** en LOO
+(3 avis positifs prédits neutres). Le script l'affiche aussi, pour montrer
+qu'un modèle de régression est mal adapté ici — ce n'est pas le comparateur
+du sujet, c'est le SVM de classification (SVC).
+
+**23 avis sur 24 sont corrects** avec le modèle retenu ; un avis positif est
+prédit `neutre`.
 
 À titre de comparaison, le même test avec **TF-IDF seul** (sans les listes de
 mots) donne **0.125**. Ce score très bas est un artefact connu d'un jeu
@@ -190,7 +213,7 @@ La page envoie les requêtes à `http://127.0.0.1:8000` ; la classe
 
 | Étape | Fichiers | Ce qui est fait |
 |---|---|---|
-| 1. Modélisation texte | `preprocessing.py`, `train_model.py`, `classifier.py` | Chargement de `textes.csv`, minuscules + suppression des mots grammaticaux, TF-IDF (1-grams et 2-grams) + 5 indices calculés à partir de petites listes de mots positifs / négatifs / neutres / de négation, Régression Logistique, matrice de confusion, rapport de classification, `model.pkl` + `vectorizer.pkl` |
+| 1. Modélisation texte | `preprocessing.py`, `train_model.py`, `classifier.py` | Chargement de `textes.csv`, minuscules + suppression des mots grammaticaux, TF-IDF (1-grams et 2-grams) + 5 indices calculés à partir de petites listes de mots positifs / négatifs / neutres / de négation, Régression Logistique, matrices de confusion, rapport de classification, comparaison SVM (SVC) et SVR, `model.pkl` + `vectorizer.pkl` |
 | 2. OCR & ASR | `ocr_module.py`, `asr_module.py` | Image : Pillow (niveaux de gris, contraste) puis vrai Tesseract en français (`lang="fra"`) ; aucun retour au CSV. Audio : vraie transcription locale faster-whisper ; aucun retour au CSV. Le texte obtenu est envoyé au classifieur |
 | 3. API REST | `main.py`, `schemas.py` | `/predict/text`, `/predict/image`, `/predict/audio`, `/predict` (détection auto). Pydantic valide le texte, les extensions, les types MIME et la taille maximale (10 Mo). Erreurs incorrectes → 422 |
 | 4. Application web | `web_app.html`, `/docs` | Option B : saisie de texte, import d'image ou d'audio, appel de l'API en arrière-plan, affichage du sentiment et de la confiance. Option A également documentée via Swagger |
@@ -233,8 +256,8 @@ Autres essais réels effectués :
 Les captures correspondantes sont dans `screenshots/` :
 `web_app.png` et `swagger.png`.
 
-Le fichier `REPONSES_PROFESSEUR.md` reprend les 20 questions les plus
-probables à l'oral avec une réponse courte et honnête à chacune.
+Le fichier `REPONSES.md` reprend les 22 questions les plus probables à l'oral
+avec une réponse courte et honnête à chacune, dont la comparaison avec le SVM.
 
 ### Choix techniques expliqués
 
@@ -262,6 +285,10 @@ probables à l'oral avec une réponse courte et honnête à chacune.
 - **Évaluation Leave-One-Out** : 0.958 (23/24) contre 0.125 pour TF-IDF seul.
   C'est la preuve que les listes de mots, et non la mémorisation, permettent
   de généraliser. Le score 1.00 sur l'entraînement est donné à titre indicatif.
+- **Comparaison SVM / SVR** : le PDF autorise « Régression Logistique ou SVM ».
+  Les trois matrices et le tableau de comparaison sont produits par
+  `train_model.py`. SVC arrive à égalité (0.958) mais ne fournit pas de
+  probabilités ; SVR est moins bon (0.875). D'où le choix final.
 - **Limite connue** : 24 textes et 9 images/audios. Le projet démontre le
   principe de la cascade et fonctionne sur les avis proches du dataset ;
   il n'est pas dimensionné pour la production. Le premier appel Whisper

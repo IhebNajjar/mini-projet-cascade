@@ -186,3 +186,49 @@ entraînement/test, davantage de mots dans les listes, une mesure d'erreur de
 transcription (WER) pour l'audio comme dans l'atelier 3, et le passage au
 modèle Whisper `small` pour un meilleur français. Le Leave-One-Out est déjà
 fait : 0.958 contre 0.125 sans lexique.
+
+## 21. Le sujet demande une comparaison : avez-vous testé un SVM ?
+
+Oui — c'est même le comparateur proposé par le PDF (« Régression Logistique
+ou SVM »). `train_model.py` entraîne les deux modèles avec la **même**
+vectorisation et affiche une matrice de confusion pour chacun, sur
+l'entraînement et en Leave-One-Out :
+
+| Modèle | Acc. entraînement | Acc. LOO | F1 macro LOO |
+|---|---|---|---|
+| **Régression Logistique (retenu)** | 1.000 | **0.958** | **0.958** |
+| SVM linéaire (SVC) | 1.000 | **0.958** | **0.958** |
+
+Matrices LOO (lignes = vérité, colonnes = prédiction) :
+
+```
+Régression Logistique        SVM linéaire (SVC)
+[[8 0 0]                     [[8 0 0]
+ [0 8 0]                      [0 8 0]
+ [0 1 7]]                     [0 1 7]]
+```
+
+Les deux modèles se trompent sur le même avis positif, prédit `neutre`. Je
+garde la Régression Logistique parce qu'à score égal elle retourne des
+probabilités : c'est ce qui alimente le champ `confiance` de l'API. Le SVC
+par défaut donne une décision sèche ; il faudrait `probability=True` (plus
+lent) pour obtenir une confiance.
+
+## 22. Bonus : et avec un SVR ?
+
+Le script affiche aussi une ligne `SVR` à titre de curiosité. SVR est un
+modèle de **régression** : `PontSVR` code les classes 0/1/2 puis arrondit la
+sortie. Il obtient 1.000 sur l'entraînement mais seulement **0.875** en LOO,
+avec 3 avis positifs prédits neutres :
+
+```
+SVR — Leave-One-Out
+[[8 0 0]
+ [0 8 0]
+ [0 3 5]]
+```
+
+C'est une limite normale d'un modèle de régression utilisé pour classer. Ce
+n'est pas le comparateur demandé — le bon comparateur est le SVM de
+classification (SVC) de la question 21 — mais cela montre pourquoi je n'ai
+pas retenu SVR.
