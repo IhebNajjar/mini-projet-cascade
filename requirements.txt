@@ -5,6 +5,7 @@ python-multipart>=0.0.12
 scikit-learn==1.9.*
 pandas>=2.2.0
 numpy>=2.0.0
+matplotlib>=3.9.0
 pillow>=11.0.0
 pytesseract>=0.3.13
 faster-whisper>=1.1.0

@@ -23,7 +23,8 @@ Auto   ──► détection du type ─────► POST /predict ───�
 ```
 mini-projet-cascade/
 ├── preprocessing.py      Étape 1 — nettoyage + listes de mots de sentiment
-├── train_model.py        Étape 1 — entraînement, évaluation, sauvegarde des .pkl
+├── train_model.py        Étape 1 — entraînement, matrices, comparaison SVM, .pkl
+├── generer_graphiques.py Étape 1 — génère les images des matrices et graphiques
 ├── classifier.py         Étape 1 — chargement des artefacts et prédiction
 ├── ocr_module.py         Étape 2 — lecture du texte dans une image (pytesseract + Pillow)
 ├── asr_module.py         Étape 2 — transcription locale (faster-whisper)
@@ -46,8 +47,10 @@ mini-projet-cascade/
 │   ├── model.pkl
 │   └── vectorizer.pkl
 ├── screenshots/
-│   ├── web_app.png       Mini-application en fonctionnement
-│   └── swagger.png       Documentation interactive /docs
+│   ├── web_app.png            Mini-application en fonctionnement
+│   ├── swagger.png            Documentation interactive /docs
+│   ├── confusion_matrices.png 4 matrices (entraînement + LOO, LR et SVM)
+│   └── comparaison_modeles.png Graphiques comparatifs et effet du lexique
 └── README.md             Ce fichier
 ```
 
@@ -115,6 +118,7 @@ obligatoire. Pour le rejouer :
 
 ```bash
 python train_model.py
+python generer_graphiques.py   # facultatif : régénère les 2 images ci-dessous
 ```
 
 Le script affiche une **matrice de confusion par modèle** (lignes = vérité,
@@ -170,6 +174,15 @@ minuscule et parfaitement équilibré : retirer un exemple rend sa classe plus
 rare et le modèle se trompe. Il montre surtout que ce sont les **listes de
 mots** qui apportent la connaissance préalable et permettent de généraliser :
 LOO passe de **0.125 à 0.958**. À dire soi-même à l'oral.
+
+### Captures des matrices et graphiques
+
+Ces images sont générées automatiquement par `python generer_graphiques.py`
+(matplotlib), à partir des vrais calculs — pas de dessin manuel :
+
+![Matrices de confusion : entraînement et Leave-One-Out pour la régression logistique et le SVM](screenshots/confusion_matrices.png)
+
+![Comparaison des modèles et effet des listes de mots](screenshots/comparaison_modeles.png)
 
 Le score de 1.00 affiché plus haut est mesuré sur les textes d'entraînement :
 ce n'est **pas** une mesure de généralisation. C'est une vérification que le

@@ -214,6 +214,11 @@ probabilités : c'est ce qui alimente le champ `confiance` de l'API. Le SVC
 par défaut donne une décision sèche ; il faudrait `probability=True` (plus
 lent) pour obtenir une confiance.
 
+Les quatre matrices (entraînement et LOO pour les deux modèles) et les
+graphiques comparatifs sont fournis en images dans `screenshots/` :
+`confusion_matrices.png` et `comparaison_modeles.png`. Elles sont générées par
+`python generer_graphiques.py`, donc les chiffres sont ceux des calculs réels.
+
 ## 22. Bonus : et avec un SVR ?
 
 Le script affiche aussi une ligne `SVR` à titre de curiosité. SVR est un
